@@ -19,41 +19,25 @@ export const CustomKanban = () => {
 };
 
 const Board = () => {
-  const [cards, setCards] = useState(DEFAULT_CARDS);
+  const [cards, setCards] = useState<CardType[]>(DEFAULT_CARDS);
 
   return (
     <div className="flex h-full w-full gap-3 overflow-scroll p-12">
-      <Column
-        title="Backlog"
-        column="backlog"
-        headingColor="text-neutral-500"
-        cards={cards}
-        setCards={setCards}
-      />
-      <Column
-        title="TODO"
-        column="todo"
-        headingColor="text-yellow-200"
-        cards={cards}
-        setCards={setCards}
-      />
-      <Column
-        title="In progress"
-        column="doing"
-        headingColor="text-blue-200"
-        cards={cards}
-        setCards={setCards}
-      />
-      <Column
-        title="Complete"
-        column="done"
-        headingColor="text-emerald-200"
-        cards={cards}
-        setCards={setCards}
-      />
+      <Column title="Backlog" column="backlog" headingColor="text-neutral-500" cards={cards} setCards={setCards} />
+      <Column title="TODO" column="todo" headingColor="text-yellow-200" cards={cards} setCards={setCards} />
+      <Column title="In progress" column="doing" headingColor="text-blue-200" cards={cards} setCards={setCards} />
+      <Column title="Complete" column="done" headingColor="text-emerald-200" cards={cards} setCards={setCards} />
       <BurnBarrel setCards={setCards} />
     </div>
   );
+};
+
+type ColumnType = "backlog" | "todo" | "doing" | "done";
+
+type CardType = {
+  title: string;
+  id: string;
+  column: ColumnType;
 };
 
 type ColumnProps = {
@@ -64,13 +48,7 @@ type ColumnProps = {
   setCards: Dispatch<SetStateAction<CardType[]>>;
 };
 
-const Column = ({
-  title,
-  headingColor,
-  cards,
-  column,
-  setCards,
-}: ColumnProps) => {
+const Column = ({ title, headingColor, cards, column, setCards }: ColumnProps) => {
   const [active, setActive] = useState(false);
 
   const handleDragStart = (e: DragEvent, card: CardType) => {
@@ -79,35 +57,28 @@ const Column = ({
 
   const handleDragEnd = (e: DragEvent) => {
     const cardId = e.dataTransfer.getData("cardId");
-
     setActive(false);
     clearHighlights();
 
     const indicators = getIndicators();
     const { element } = getNearestIndicator(e, indicators);
-
     const before = element.dataset.before || "-1";
 
     if (before !== cardId) {
       let copy = [...cards];
-
       let cardToTransfer = copy.find((c) => c.id === cardId);
       if (!cardToTransfer) return;
       cardToTransfer = { ...cardToTransfer, column };
-
       copy = copy.filter((c) => c.id !== cardId);
 
       const moveToBack = before === "-1";
-
       if (moveToBack) {
         copy.push(cardToTransfer);
       } else {
         const insertAtIndex = copy.findIndex((el) => el.id === before);
-        if (insertAtIndex === undefined) return;
-
+        if (insertAtIndex === -1) return;
         copy.splice(insertAtIndex, 0, cardToTransfer);
       }
-
       setCards(copy);
     }
   };
@@ -115,13 +86,16 @@ const Column = ({
   const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
     highlightIndicator(e);
-
     setActive(true);
+  };
+
+  const handleDragLeave = () => {
+    clearHighlights();
+    setActive(false);
   };
 
   const clearHighlights = (els?: HTMLElement[]) => {
     const indicators = els || getIndicators();
-
     indicators.forEach((i) => {
       i.style.opacity = "0";
     });
@@ -129,49 +103,32 @@ const Column = ({
 
   const highlightIndicator = (e: DragEvent) => {
     const indicators = getIndicators();
-
     clearHighlights(indicators);
-
     const el = getNearestIndicator(e, indicators);
-
     el.element.style.opacity = "1";
   };
 
   const getNearestIndicator = (e: DragEvent, indicators: HTMLElement[]) => {
     const DISTANCE_OFFSET = 50;
-
-    const el = indicators.reduce(
+    return indicators.reduce(
       (closest, child) => {
         const box = child.getBoundingClientRect();
-
         const offset = e.clientY - (box.top + DISTANCE_OFFSET);
-
-        if (offset < 0 && offset > closest.offset) {
-          return { offset: offset, element: child };
-        } else {
-          return closest;
-        }
+        return offset < 0 && offset > closest.offset
+          ? { offset, element: child }
+          : closest;
       },
       {
         offset: Number.NEGATIVE_INFINITY,
         element: indicators[indicators.length - 1],
       }
     );
-
-    return el;
   };
 
   const getIndicators = () => {
     return Array.from(
-      document.querySelectorAll(
-        `[data-column="${column}"]`
-      ) as unknown as HTMLElement[]
+      document.querySelectorAll(`[data-column="${column}"]`) as NodeListOf<HTMLElement>
     );
-  };
-
-  const handleDragLeave = () => {
-    clearHighlights();
-    setActive(false);
   };
 
   const filteredCards = cards.filter((c) => c.column === column);
@@ -180,21 +137,17 @@ const Column = ({
     <div className="w-56 shrink-0">
       <div className="mb-3 flex items-center justify-between">
         <h3 className={`font-medium ${headingColor}`}>{title}</h3>
-        <span className="rounded text-sm text-neutral-400">
-          {filteredCards.length}
-        </span>
+        <span className="rounded text-sm text-neutral-400">{filteredCards.length}</span>
       </div>
       <div
         onDrop={handleDragEnd}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        className={`h-full w-full transition-colors ${
-          active ? "bg-neutral-800/50" : "bg-neutral-800/0"
-        }`}
+        className={`h-full w-full transition-colors ${active ? "bg-neutral-800/50" : "bg-neutral-800/0"}`}
       >
-        {filteredCards.map((c) => {
-          return <Card key={c.id} {...c} handleDragStart={handleDragStart} />;
-        })}
+        {filteredCards.map((c) => (
+          <Card key={c.id} {...c} handleDragStart={handleDragStart} />
+        ))}
         <DropIndicator beforeId={null} column={column} />
         <AddCard column={column} setCards={setCards} />
       </div>
@@ -203,7 +156,7 @@ const Column = ({
 };
 
 type CardProps = CardType & {
-  handleDragStart: Function;
+  handleDragStart: (e: DragEvent, card: CardType) => void;
 };
 
 const Card = ({ title, id, column, handleDragStart }: CardProps) => {
@@ -213,7 +166,7 @@ const Card = ({ title, id, column, handleDragStart }: CardProps) => {
       <motion.div
         layout
         layoutId={id}
-        draggable="true"
+        draggable
         onDragStart={(e) => handleDragStart(e, { title, id, column })}
         className="cursor-grab rounded border border-neutral-700 bg-neutral-800 p-3 active:cursor-grabbing"
       >
@@ -225,24 +178,18 @@ const Card = ({ title, id, column, handleDragStart }: CardProps) => {
 
 type DropIndicatorProps = {
   beforeId: string | null;
-  column: string;
+  column: ColumnType;
 };
 
-const DropIndicator = ({ beforeId, column }: DropIndicatorProps) => {
-  return (
-    <div
-      data-before={beforeId || "-1"}
-      data-column={column}
-      className="my-0.5 h-0.5 w-full bg-violet-400 opacity-0"
-    />
-  );
-};
+const DropIndicator = ({ beforeId, column }: DropIndicatorProps) => (
+  <div
+    data-before={beforeId || "-1"}
+    data-column={column}
+    className="my-0.5 h-0.5 w-full bg-violet-400 opacity-0"
+  />
+);
 
-const BurnBarrel = ({
-  setCards,
-}: {
-  setCards: Dispatch<SetStateAction<CardType[]>>;
-}) => {
+const BurnBarrel = ({ setCards }: { setCards: Dispatch<SetStateAction<CardType[]>> }) => {
   const [active, setActive] = useState(false);
 
   const handleDragOver = (e: DragEvent) => {
@@ -254,17 +201,15 @@ const BurnBarrel = ({
     setActive(false);
   };
 
-  const handleDragEnd = (e: DragEvent) => {
+  const handleDrop = (e: DragEvent) => {
     const cardId = e.dataTransfer.getData("cardId");
-
     setCards((pv) => pv.filter((c) => c.id !== cardId));
-
     setActive(false);
   };
 
   return (
     <div
-      onDrop={handleDragEnd}
+      onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       className={`mt-10 grid h-56 w-56 shrink-0 place-content-center rounded border text-3xl ${
@@ -287,96 +232,65 @@ const AddCard = ({ column, setCards }: AddCardProps) => {
   const [text, setText] = useState("");
   const [adding, setAdding] = useState(false);
 
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-
-    if (!text.trim().length) return;
-
-    const newCard = {
+    if (!text.trim()) return;
+    const newCard: CardType = {
       column,
       title: text.trim(),
       id: Math.random().toString(),
     };
-
     setCards((pv) => [...pv, newCard]);
-
+    setText("");
     setAdding(false);
   };
 
-  return (
-    <>
-      {adding ? (
-        <motion.form layout onSubmit={handleSubmit}>
-          <textarea
-            onChange={(e) => setText(e.target.value)}
-            autoFocus
-            placeholder="Add new task..."
-            className="w-full rounded border border-violet-400 bg-violet-400/20 p-3 text-sm text-neutral-50 placeholder-violet-300 focus:outline-0"
-          />
-          <div className="mt-1.5 flex items-center justify-end gap-1.5">
-            <button
-              onClick={() => setAdding(false)}
-              className="px-3 py-1.5 text-xs text-neutral-400 transition-colors hover:text-neutral-50"
-            >
-              Close
-            </button>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 rounded bg-neutral-50 px-3 py-1.5 text-xs text-neutral-950 transition-colors hover:bg-neutral-300"
-            >
-              <span>Add</span>
-              <FiPlus />
-            </button>
-          </div>
-        </motion.form>
-      ) : (
-        <motion.button
-          layout
-          onClick={() => setAdding(true)}
-          className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-400 transition-colors hover:text-neutral-50"
+  return adding ? (
+    <motion.form layout onSubmit={handleSubmit}>
+      <textarea
+        onChange={(e) => setText(e.target.value)}
+        autoFocus
+        placeholder="Add new task..."
+        className="w-full rounded border border-violet-400 bg-violet-400/20 p-3 text-sm text-neutral-50 placeholder-violet-300 focus:outline-0"
+      />
+      <div className="mt-1.5 flex items-center justify-end gap-1.5">
+        <button
+          type="button"
+          onClick={() => setAdding(false)}
+          className="px-3 py-1.5 text-xs text-neutral-400 transition-colors hover:text-neutral-50"
         >
-          <span>Add card</span>
+          Close
+        </button>
+        <button
+          type="submit"
+          className="flex items-center gap-1.5 rounded bg-neutral-50 px-3 py-1.5 text-xs text-neutral-950 transition-colors hover:bg-neutral-300"
+        >
+          <span>Add</span>
           <FiPlus />
-        </motion.button>
-      )}
-    </>
+        </button>
+      </div>
+    </motion.form>
+  ) : (
+    <motion.button
+      layout
+      onClick={() => setAdding(true)}
+      className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-400 transition-colors hover:text-neutral-50"
+    >
+      <span>Add card</span>
+      <FiPlus />
+    </motion.button>
   );
 };
 
-type ColumnType = "backlog" | "todo" | "doing" | "done";
-
-type CardType = {
-  title: string;
-  id: string;
-  column: ColumnType;
-};
-
 const DEFAULT_CARDS: CardType[] = [
-  // BACKLOG
   { title: "Research OAuth vs JWT for user auth", id: "1", column: "backlog" },
   { title: "Decide on mobile-first or desktop-first layout", id: "2", column: "backlog" },
   { title: "Plan component folder structure", id: "3", column: "backlog" },
   { title: "Choose between Zustand and Redux Toolkit", id: "4", column: "backlog" },
-  // TODO
-  {
-    title: "Set up CI/CD with GitHub Actions",
-    id: "5",
-    column: "todo",
-  },
+  { title: "Set up CI/CD with GitHub Actions", id: "5", column: "todo" },
   { title: "Build reusable Modal component", id: "6", column: "todo" },
   { title: "Implement user login API", id: "7", column: "todo" },
-
-  // DOING
-  {
-    title: "Develop responsive Navbar with dropdowns",
-    id: "8",
-    column: "doing",
-  },
+  { title: "Develop responsive Navbar with dropdowns", id: "8", column: "doing" },
   { title: "Add logging to daily CRON", id: "9", column: "doing" },
-  // DONE
-  {
-    title: "Set up Tailwind CSS and ESLint",
-    id: "10",
-    column: "done",
-  },
+  { title: "Set up Tailwind CSS and ESLint", id: "10", column: "done" },
 ];
