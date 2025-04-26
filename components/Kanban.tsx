@@ -1,15 +1,34 @@
 "use client";
-import React, {
-  Dispatch,
-  SetStateAction,
-  useState,
-  DragEvent,
-  FormEvent,
-} from "react";
-import { FiPlus, FiTrash } from "react-icons/fi";
+
+import React, { useState, DragEvent, FormEvent, Dispatch, SetStateAction } from "react";
 import { motion } from "framer-motion";
+import { FiPlus, FiTrash } from "react-icons/fi";
 import { FaFire } from "react-icons/fa";
 
+// Types
+type ColumnType = "backlog" | "todo" | "doing" | "done";
+
+type CardType = {
+  title: string;
+  id: string;
+  column: ColumnType;
+};
+
+// Default Cards
+const DEFAULT_CARDS: CardType[] = [
+  { title: "Research OAuth vs JWT for user auth", id: "1", column: "backlog" },
+  { title: "Decide on mobile-first or desktop-first layout", id: "2", column: "backlog" },
+  { title: "Plan component folder structure", id: "3", column: "backlog" },
+  { title: "Choose between Zustand and Redux Toolkit", id: "4", column: "backlog" },
+  { title: "Set up CI/CD with GitHub Actions", id: "5", column: "todo" },
+  { title: "Build reusable Modal component", id: "6", column: "todo" },
+  { title: "Implement user login API", id: "7", column: "todo" },
+  { title: "Develop responsive Navbar with dropdowns", id: "8", column: "doing" },
+  { title: "Add logging to daily CRON", id: "9", column: "doing" },
+  { title: "Set up Tailwind CSS and ESLint", id: "10", column: "done" },
+];
+
+// Main Kanban Component
 export const CustomKanban = () => {
   return (
     <div className="h-screen w-full bg-neutral-900 text-neutral-50">
@@ -18,183 +37,142 @@ export const CustomKanban = () => {
   );
 };
 
+// Board
 const Board = () => {
-  const [cards, setCards] = useState(DEFAULT_CARDS);
+  const [cards, setCards] = useState<CardType[]>(DEFAULT_CARDS);
 
   return (
-    <div className="flex h-full w-full gap-3 overflow-scroll p-12">
-      <Column
-        title="Backlog"
-        column="backlog"
-        headingColor="text-neutral-500"
-        cards={cards}
-        setCards={setCards}
-      />
-      <Column
-        title="TODO"
-        column="todo"
-        headingColor="text-yellow-200"
-        cards={cards}
-        setCards={setCards}
-      />
-      <Column
-        title="In progress"
-        column="doing"
-        headingColor="text-blue-200"
-        cards={cards}
-        setCards={setCards}
-      />
-      <Column
-        title="Complete"
-        column="done"
-        headingColor="text-emerald-200"
-        cards={cards}
-        setCards={setCards}
-      />
+    <div className="flex h-full w-full gap-3 overflow-x-auto p-12">
+      {["backlog", "todo", "doing", "done"].map((col) => (
+        <Column
+          key={col}
+          title={titles[col as ColumnType]}
+          headingColor={headingColors[col as ColumnType]}
+          column={col as ColumnType}
+          cards={cards}
+          setCards={setCards}
+        />
+      ))}
       <BurnBarrel setCards={setCards} />
     </div>
   );
 };
 
+const titles: Record<ColumnType, string> = {
+  backlog: "Backlog",
+  todo: "TODO",
+  doing: "In Progress",
+  done: "Complete",
+};
+
+const headingColors: Record<ColumnType, string> = {
+  backlog: "text-neutral-500",
+  todo: "text-yellow-200",
+  doing: "text-blue-200",
+  done: "text-emerald-200",
+};
+
+// Column
 type ColumnProps = {
   title: string;
   headingColor: string;
-  cards: CardType[];
   column: ColumnType;
+  cards: CardType[];
   setCards: Dispatch<SetStateAction<CardType[]>>;
 };
 
-const Column = ({
-  title,
-  headingColor,
-  cards,
-  column,
-  setCards,
-}: ColumnProps) => {
+const Column = ({ title, headingColor, column, cards, setCards }: ColumnProps) => {
   const [active, setActive] = useState(false);
+
+  const filteredCards = cards.filter((c) => c.column === column);
 
   const handleDragStart = (e: DragEvent, card: CardType) => {
     e.dataTransfer.setData("cardId", card.id);
   };
 
-  const handleDragEnd = (e: DragEvent) => {
-    const cardId = e.dataTransfer.getData("cardId");
-
-    setActive(false);
-    clearHighlights();
-
-    const indicators = getIndicators();
-    const { element } = getNearestIndicator(e, indicators);
-
-    const before = element.dataset.before || "-1";
-
-    if (before !== cardId) {
-      let copy = [...cards];
-
-      let cardToTransfer = copy.find((c) => c.id === cardId);
-      if (!cardToTransfer) return;
-      cardToTransfer = { ...cardToTransfer, column };
-
-      copy = copy.filter((c) => c.id !== cardId);
-
-      const moveToBack = before === "-1";
-
-      if (moveToBack) {
-        copy.push(cardToTransfer);
-      } else {
-        const insertAtIndex = copy.findIndex((el) => el.id === before);
-        if (insertAtIndex === undefined) return;
-
-        copy.splice(insertAtIndex, 0, cardToTransfer);
-      }
-
-      setCards(copy);
-    }
-  };
-
   const handleDragOver = (e: DragEvent) => {
     e.preventDefault();
     highlightIndicator(e);
-
     setActive(true);
   };
 
-  const clearHighlights = (els?: HTMLElement[]) => {
-    const indicators = els || getIndicators();
+  const handleDrop = (e: DragEvent) => {
+    const cardId = e.dataTransfer.getData("cardId");
+    const indicators = getIndicators();
+    const { element } = getNearestIndicator(e, indicators);
+    const beforeId = element.dataset.before || "-1";
 
-    indicators.forEach((i) => {
-      i.style.opacity = "0";
-    });
+    if (beforeId !== cardId) {
+      let updated = [...cards];
+      const movingCard = updated.find((c) => c.id === cardId);
+      if (!movingCard) return;
+
+      const updatedCard = { ...movingCard, column };
+      updated = updated.filter((c) => c.id !== cardId);
+
+      const insertIndex = updated.findIndex((c) => c.id === beforeId);
+      if (insertIndex >= 0) {
+        updated.splice(insertIndex, 0, updatedCard);
+      } else {
+        updated.push(updatedCard);
+      }
+
+      setCards(updated);
+    }
+
+    setActive(false);
+    clearHighlights();
+  };
+
+  const handleDragLeave = () => {
+    setActive(false);
+    clearHighlights();
+  };
+
+  const getIndicators = () =>
+    Array.from(document.querySelectorAll(`[data-column="${column}"]`) as unknown as HTMLElement[]);
+
+  const clearHighlights = (els?: HTMLElement[]) => {
+    (els || getIndicators()).forEach((el) => (el.style.opacity = "0"));
   };
 
   const highlightIndicator = (e: DragEvent) => {
     const indicators = getIndicators();
-
     clearHighlights(indicators);
 
-    const el = getNearestIndicator(e, indicators);
-
-    el.element.style.opacity = "1";
+    const { element } = getNearestIndicator(e, indicators);
+    element.style.opacity = "1";
   };
 
   const getNearestIndicator = (e: DragEvent, indicators: HTMLElement[]) => {
     const DISTANCE_OFFSET = 50;
-
-    const el = indicators.reduce(
+    return indicators.reduce(
       (closest, child) => {
         const box = child.getBoundingClientRect();
-
         const offset = e.clientY - (box.top + DISTANCE_OFFSET);
-
-        if (offset < 0 && offset > closest.offset) {
-          return { offset: offset, element: child };
-        } else {
-          return closest;
-        }
+        return offset < 0 && offset > closest.offset
+          ? { offset, element: child }
+          : closest;
       },
-      {
-        offset: Number.NEGATIVE_INFINITY,
-        element: indicators[indicators.length - 1],
-      }
-    );
-
-    return el;
-  };
-
-  const getIndicators = () => {
-    return Array.from(
-      document.querySelectorAll(
-        `[data-column="${column}"]`
-      ) as unknown as HTMLElement[]
+      { offset: Number.NEGATIVE_INFINITY, element: indicators[indicators.length - 1] }
     );
   };
-
-  const handleDragLeave = () => {
-    clearHighlights();
-    setActive(false);
-  };
-
-  const filteredCards = cards.filter((c) => c.column === column);
 
   return (
     <div className="w-56 shrink-0">
       <div className="mb-3 flex items-center justify-between">
         <h3 className={`font-medium ${headingColor}`}>{title}</h3>
-        <span className="rounded text-sm text-neutral-400">
-          {filteredCards.length}
-        </span>
+        <span className="text-sm text-neutral-400">{filteredCards.length}</span>
       </div>
       <div
-        onDrop={handleDragEnd}
         onDragOver={handleDragOver}
+        onDrop={handleDrop}
         onDragLeave={handleDragLeave}
-        className={`h-full w-full transition-colors ${
-          active ? "bg-neutral-800/50" : "bg-neutral-800/0"
-        }`}
+        className={`h-full w-full transition-colors ${active ? "bg-neutral-800/50" : ""}`}
       >
-        {filteredCards.map((c) => {
-          return <Card key={c.id} {...c} handleDragStart={handleDragStart} />;
-        })}
+        {filteredCards.map((card) => (
+          <Card key={card.id} {...card} handleDragStart={handleDragStart} />
+        ))}
         <DropIndicator beforeId={null} column={column} />
         <AddCard column={column} setCards={setCards} />
       </div>
@@ -202,8 +180,9 @@ const Column = ({
   );
 };
 
+// Card
 type CardProps = CardType & {
-  handleDragStart: Function;
+  handleDragStart: (e: DragEvent, card: CardType) => void;
 };
 
 const Card = ({ title, id, column, handleDragStart }: CardProps) => {
@@ -223,26 +202,85 @@ const Card = ({ title, id, column, handleDragStart }: CardProps) => {
   );
 };
 
+// DropIndicator
 type DropIndicatorProps = {
   beforeId: string | null;
-  column: string;
+  column: ColumnType;
 };
 
-const DropIndicator = ({ beforeId, column }: DropIndicatorProps) => {
-  return (
-    <div
-      data-before={beforeId || "-1"}
-      data-column={column}
-      className="my-0.5 h-0.5 w-full bg-violet-400 opacity-0"
-    />
+const DropIndicator = ({ beforeId, column }: DropIndicatorProps) => (
+  <div
+    data-before={beforeId || "-1"}
+    data-column={column}
+    className="my-0.5 h-0.5 w-full bg-violet-400 opacity-0"
+  />
+);
+
+// AddCard
+type AddCardProps = {
+  column: ColumnType;
+  setCards: Dispatch<SetStateAction<CardType[]>>;
+};
+
+const AddCard = ({ column, setCards }: AddCardProps) => {
+  const [text, setText] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+
+    const newCard: CardType = {
+      title: text.trim(),
+      id: Math.random().toString(),
+      column,
+    };
+
+    setCards((prev) => [...prev, newCard]);
+    setText("");
+    setAdding(false);
+  };
+
+  return adding ? (
+    <motion.form layout onSubmit={handleSubmit}>
+      <textarea
+        autoFocus
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        placeholder="Add new task..."
+        className="w-full rounded border border-violet-400 bg-violet-400/20 p-3 text-sm text-neutral-50 placeholder-violet-300 focus:outline-none"
+      />
+      <div className="mt-1.5 flex items-center justify-end gap-1.5">
+        <button
+          type="button"
+          onClick={() => setAdding(false)}
+          className="px-3 py-1.5 text-xs text-neutral-400 hover:text-neutral-50"
+        >
+          Close
+        </button>
+        <button
+          type="submit"
+          className="flex items-center gap-1.5 rounded bg-neutral-50 px-3 py-1.5 text-xs text-neutral-950 hover:bg-neutral-300"
+        >
+          Add
+          <FiPlus />
+        </button>
+      </div>
+    </motion.form>
+  ) : (
+    <motion.button
+      layout
+      onClick={() => setAdding(true)}
+      className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-400 hover:text-neutral-50"
+    >
+      Add card
+      <FiPlus />
+    </motion.button>
   );
 };
 
-const BurnBarrel = ({
-  setCards,
-}: {
-  setCards: Dispatch<SetStateAction<CardType[]>>;
-}) => {
+// BurnBarrel
+const BurnBarrel = ({ setCards }: { setCards: Dispatch<SetStateAction<CardType[]>> }) => {
   const [active, setActive] = useState(false);
 
   const handleDragOver = (e: DragEvent) => {
@@ -250,21 +288,17 @@ const BurnBarrel = ({
     setActive(true);
   };
 
-  const handleDragLeave = () => {
-    setActive(false);
-  };
+  const handleDragLeave = () => setActive(false);
 
-  const handleDragEnd = (e: DragEvent) => {
+  const handleDrop = (e: DragEvent) => {
     const cardId = e.dataTransfer.getData("cardId");
-
-    setCards((pv) => pv.filter((c) => c.id !== cardId));
-
+    setCards((prev) => prev.filter((c) => c.id !== cardId));
     setActive(false);
   };
 
   return (
     <div
-      onDrop={handleDragEnd}
+      onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       className={`mt-10 grid h-56 w-56 shrink-0 place-content-center rounded border text-3xl ${
@@ -277,106 +311,3 @@ const BurnBarrel = ({
     </div>
   );
 };
-
-type AddCardProps = {
-  column: ColumnType;
-  setCards: Dispatch<SetStateAction<CardType[]>>;
-};
-
-const AddCard = ({ column, setCards }: AddCardProps) => {
-  const [text, setText] = useState("");
-  const [adding, setAdding] = useState(false);
-
-  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    if (!text.trim().length) return;
-
-    const newCard = {
-      column,
-      title: text.trim(),
-      id: Math.random().toString(),
-    };
-
-    setCards((pv) => [...pv, newCard]);
-
-    setAdding(false);
-  };
-
-  return (
-    <>
-      {adding ? (
-        <motion.form layout onSubmit={handleSubmit}>
-          <textarea
-            onChange={(e) => setText(e.target.value)}
-            autoFocus
-            placeholder="Add new task..."
-            className="w-full rounded border border-violet-400 bg-violet-400/20 p-3 text-sm text-neutral-50 placeholder-violet-300 focus:outline-0"
-          />
-          <div className="mt-1.5 flex items-center justify-end gap-1.5">
-            <button
-              onClick={() => setAdding(false)}
-              className="px-3 py-1.5 text-xs text-neutral-400 transition-colors hover:text-neutral-50"
-            >
-              Close
-            </button>
-            <button
-              type="submit"
-              className="flex items-center gap-1.5 rounded bg-neutral-50 px-3 py-1.5 text-xs text-neutral-950 transition-colors hover:bg-neutral-300"
-            >
-              <span>Add</span>
-              <FiPlus />
-            </button>
-          </div>
-        </motion.form>
-      ) : (
-        <motion.button
-          layout
-          onClick={() => setAdding(true)}
-          className="flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-400 transition-colors hover:text-neutral-50"
-        >
-          <span>Add card</span>
-          <FiPlus />
-        </motion.button>
-      )}
-    </>
-  );
-};
-
-type ColumnType = "backlog" | "todo" | "doing" | "done";
-
-type CardType = {
-  title: string;
-  id: string;
-  column: ColumnType;
-};
-
-const DEFAULT_CARDS: CardType[] = [
-  // BACKLOG
-  { title: "Research OAuth vs JWT for user auth", id: "1", column: "backlog" },
-  { title: "Decide on mobile-first or desktop-first layout", id: "2", column: "backlog" },
-  { title: "Plan component folder structure", id: "3", column: "backlog" },
-  { title: "Choose between Zustand and Redux Toolkit", id: "4", column: "backlog" },
-  // TODO
-  {
-    title: "Set up CI/CD with GitHub Actions",
-    id: "5",
-    column: "todo",
-  },
-  { title: "Build reusable Modal component", id: "6", column: "todo" },
-  { title: "Implement user login API", id: "7", column: "todo" },
-
-  // DOING
-  {
-    title: "Develop responsive Navbar with dropdowns",
-    id: "8",
-    column: "doing",
-  },
-  { title: "Add logging to daily CRON", id: "9", column: "doing" },
-  // DONE
-  {
-    title: "Set up Tailwind CSS and ESLint",
-    id: "10",
-    column: "done",
-  },
-];
